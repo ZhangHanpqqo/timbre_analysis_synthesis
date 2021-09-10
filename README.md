@@ -1,6 +1,6 @@
 # timbre_analysis_synthesis
 
-This project is based on the sms-tools which is developed by MTG. Their code can be found at https://github.com/MTG/sms-tools. The timbre modification part and the modification GUI is original with Han Zhang. 
+This project is based on the sms-tools which is developed by MTG. Their code can be found at https://github.com/MTG/sms-tools. The timbre modification part and the modification GUI is originate with Han Zhang. 
 
 All the codes can be cloned from this repo, but please refer to the instructions of the sms-tools first to compile some C functions. Besides the modules they mentioned in their document, this code also need the following modules: copy, json, sklearn, joblib. Please install before use the software.
 

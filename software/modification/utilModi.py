@@ -17,6 +17,8 @@ import scipy.signal as sig
 
 import utilFunctions as UF
 import stft as STFT
+import find_attack as FA
+import hpsModel as HPS
 
 ########## functions for spectral descriptor tests  ###############
 def evenAtten(hmag, attenRatio):
@@ -24,7 +26,6 @@ def evenAtten(hmag, attenRatio):
     for h in range(hmag.shape[1]):
         if h%2 == 1:
             hmagAttened[::,h]= hmagAttened[::,h] + 20*math.log10(attenRatio)
-
     return hmagAttened
 
 def oddAtten(hmag, attenRatio, keepF0):
@@ -64,8 +65,7 @@ def gaussianModi(hmag, hfreq, freqMean, freqVar,keepF0):
 
     return hmagAttened
 
-def invGaussianModi(hmag, hfreq, freqMean, freqVar,keepF0):
-
+def invGaussianModi(hmag, hfreq, freqMean, freqVar,keepF0): 
     th = -500
     esp = 0.000000001
 
@@ -114,6 +114,9 @@ def non_zero_mean(x,f0):
          xN = xF[np.nonzero(xF)]-f0*(i+1)
          mean.append(np.mean(xN))
 
+         ## tst
+         # print('def non_zero_mean i,xN:',i,xN)
+
     return np.array(mean)
 
 def freq_ana(hfreq,f0,noiseRedu = 1):
@@ -130,6 +133,9 @@ def freq_ana(hfreq,f0,noiseRedu = 1):
         freqDrv = hfreq-freqStd
         freqVld = (np.abs(freqDrv)<f0*0.2) # threshold for validation of a certain frequency
         freqSlct = hfreq * freqVld
+
+        ## tst
+        print('freqSlct:', freqSlct)
 
     freqMean = non_zero_mean(freqSlct,f0)
     freqVar = non_zero_var(freqSlct)
@@ -166,23 +172,28 @@ def find_adsr_perc(x):
     eoa_ind = 0
     sor_ind = x.shape[0]-1
     eor_ind = x.shape[0]-1
-    # print(x_max,'\n',x)
+    
     # soa: 10% of max from start
     # eoa: 90% of max from start
-    fg = 0
-    for i in range(x.shape[0]):
-        if x[i] >= x_max + 20 * math.log10(0.1) and fg == 0:
-            soa_ind = i
-            fg = 1
-        if x[i] >= x_max + 20*math.log10(0.6):
-            eoa_ind = i
-            break
+    # fg = 0
+    # for i in range(x.shape[0]):
+    #     if x[i] >= x_max + 20 * math.log10(0.1) and fg == 0:
+    #         soa_ind = i
+    #         fg = 1
+    #     if x[i] >= x_max + 20*math.log10(0.6):
+    #         eoa_ind = i
+    #         break
+    
+    # find SOA and EOA
+    EOA, beginningSeg, steadySeg, harm_sm = find_EOA(x)
+    soa_ind = beginningSeg[0]
+    eoa_ind = EOA
 
-    # sor: 10% of max from end
-    # eor: 80% of max from end
+    # sor: 5% of max from end
+    # eor: 60% of max from end
     fg = 0
     for i in range(x.shape[0] - 1, 0, -1):
-        if x[i] >= x_max + 20 * math.log10(0.1) and fg == 0:
+        if x[i] >= x_max + 20 * math.log10(0.05) and fg == 0:
             eor_ind = i
             fg = 1
         if x[i] >= x_max + 20*math.log10(0.6):
@@ -223,7 +234,6 @@ def find_opt_n(values, x, n0=1):
 
         return res['x']
 
-
 # find curve model for partials
 def find_curved_partial(partial, ts):
 
@@ -236,7 +246,7 @@ def find_curved_partial(partial, ts):
         pt = partial[i, :]
 
         # get rid of 0dB silence (set to -500dB)
-        ptZero = -500 * (pt == 0)
+        ptZero = -200 * (pt == 0)
         pt = pt + ptZero
 
         smLength = 31  # odd length
@@ -247,13 +257,13 @@ def find_curved_partial(partial, ts):
         points.append(pt_sm.shape[0]-1)
 
         ## tst
-        if i in [0,1]:
-            print(points)
-            plt.plot(pt_sm)
-            # plt.plot(pt)
-            # plt.plot(ptZero)
-            plt.plot(points,pt_sm[points],'x')
-            plt.show()
+        # if i in [0,1,2,3,4]:
+        #     print(points)
+        #     plt.plot(pt_sm)
+        #     # plt.plot(pt)
+        #     # plt.plot(ptZero)
+        #     plt.plot(points,pt_sm[points],'x')
+        #     plt.show()
 
 
         for j in range(5):
@@ -278,6 +288,33 @@ def find_curved_partial(partial, ts):
 
     return partial_n, partial_curve, points_curve
 
+
+# find the End Of Attack with intersection detection(2021 Feb)
+def find_EOA(harm):
+    # detect non silence part of the harmonic only by the magnitude
+    nonSilence = [0,harm.size-1]
+    for i in range(harm.size):
+        if harm[i] > -200:
+            nonSilence[0] = i
+            break
+    for i in range(harm.size-1,-1,-1):
+        if harm[i] > -200:
+            nonSilence[1] = i
+            break
+
+    harm_nonZero = harm - 200 * (harm == 0)
+    harm_sm = FA.find_attack_bspline(harm_nonZero)
+
+    # find beginning segment
+    beginningSeg, beginningPara = FA.model_beginning_segment(nonSilence, harm_nonZero)
+
+    # find steady segment
+    steadySeg, steadyPara = FA.model_steady_segment(nonSilence, beginningSeg, harm_nonZero)
+
+    # find intersection AKA EOA
+    EOA = FA.model_EOA(harm_nonZero, beginningSeg, beginningPara, steadySeg, steadyPara)
+
+    return EOA, beginningSeg, steadySeg, harm_sm
 #############################################################
 
 ########## functions for plotting  ###############
@@ -298,8 +335,9 @@ def plot_spec3d(hfreq,hmag,t,content=0):
         ax_partial_curve.set_zlabel('phase(rad)')
 
     # ax_partial_curve.set_xlim((0,0.1))
-
     plt.show()
+
+    return
 
 def plot_spec3d_cmp(hfreq1, hmag1, t1, hfreq2, hmag2, t2):
 
@@ -375,6 +413,11 @@ def find_freq_spike(hfreq):
     hfreqNoise = np.array(hfreqNoise).T
     return hfreqNoise
 
+    freqNoise = np.logical_or(hfreq[:,0]<minf0, hfreq[:,0]>maxf0)
+    # print(freqNoise)
+    hfreqNoise = np.repeat(np.array([freqNoise]),nH,axis=0).T
+    return hfreqNoise
+
 def find_freq_failure(hfreq,minf0,maxf0):
     nH = hfreq.shape[1]
     freqNoise = np.logical_or(hfreq[:,0]<minf0, hfreq[:,0]>maxf0)
@@ -426,9 +469,7 @@ def intp(seg,left,right):
     step = np.arange(len(seg)) + 1
     res = left + step*(right-left)/(len(seg)+1)
     return res
-###############################################################
 
-########## functions for spectrum modification  ###############
 def find_first_frame_phase(ffphase, mode='origin'):
     if mode == 'origin':
         return ffphase,None,None,0
@@ -438,6 +479,69 @@ def find_first_frame_phase(ffphase, mode='origin'):
         return y,None, None, err
     elif mode == 'linear':
         x = np.arange(len(ffphase))
+        slope, intercept, r_value, p_value, std_err = linregress(x, ffphase)
+        y = slope*x + intercept
+        return y, slope, intercept, std_err
+
+###############################################################
+
+########## functions for sound synthesis from sound controlling parameters  ###############
+def non_silence_dtct(fff,minF0,maxF0):
+    st = 0
+    ed = len(fff)-1
+    for i in range(len(fff)):
+        if fff[i]<minF0 or fff[i]>maxF0:
+            st = i+1
+        else:
+            break
+    for i in range(len(fff)-1,-1,-1):
+        if fff[i]<minF0 or fff[i]>maxF0:
+            ed = i-1
+        else:
+            break
+    return (st,ed)
+
+def freq_syn_from_para(nH,nF,f0, freqInterval, freqMean, freqVar, freqVarRate, freqSmoothLen):
+    hfreqBase = np.arange(nH)*f0*freqInterval + f0
+    hfreqBase = np.array([hfreqBase])
+    hfreqBase = np.repeat(hfreqBase, nF, axis=0)
+
+    hfreqDist = []
+    for i in range(nH):
+        mu = freqMean[i]
+        sigma = freqVar[i] * freqVarRate
+
+        y = slope*x + intercept
+        return y, slope, intercept, std_err
+
+###############################################################
+
+########## functions for sound synthesis from sound controlling parameters  ###############
+def non_silence_dtct(fff,minF0,maxF0):
+    st = 0
+    ed = len(fff)-1
+    for i in range(len(fff)):
+        if fff[i]<minF0 or fff[i]>maxF0:
+            st = i+1
+        else:
+            break
+    for i in range(len(fff)-1,-1,-1):
+        if fff[i]<minF0 or fff[i]>maxF0:
+            ed = i-1
+        else:
+            break
+    return (st,ed)
+
+def freq_syn_from_para(nH,nF,f0, freqInterval, freqMean, freqVar, freqVarRate, freqSmoothLen):
+    hfreqBase = np.arange(nH)*f0*freqInterval + f0
+    hfreqBase = np.array([hfreqBase])
+    hfreqBase = np.repeat(hfreqBase, nF, axis=0)
+
+    hfreqDist = []
+    for i in range(nH):
+        mu = freqMean[i]
+        sigma = freqVar[i] * freqVarRate
+
         slope, intercept, r_value, p_value, std_err = linregress(x, ffphase)
         y = slope*x + intercept
         return y, slope, intercept, std_err
@@ -586,14 +690,211 @@ def read_features(path,fm = 0):
     return sdInfo
 ###########################################################################################
 
+
+########## functions for sd_info process ##########################################
+def sound_info_clct(file_path, sdInfo, nH = 40, minf0 = 100, maxf0 = 1000, M=4001, N=8192, Ns=512, H=128, window='blackmanharris'): 
+    (fs, x) = UF.wavread(file_path)
+    w = sig.get_window(window, M)
+    hfreq, hmag, hphase, stocEnv = HPS.hpsModelAnal(x, fs, w, N, H, -200, nH, minf0, maxf0, 5, 0.01, 0.1,512,0.1) # f0et, harmDevSlope, minSineDur, Ns, stocf
+
+    sdInfo['fs']=fs
+    sdInfo['stocEnv']=stocEnv
+
+    # save_path = 'result/test.xlsx'
+    # UM.save_matrix(save_path, hfreq, sheetName='guitar_freq_original')
+
+    # delete frames at the beginning where no harmonics are detected, i.e. silence
+    nonSlc = non_silence_dtct(hfreq[:, 0], minf0, maxf0)
+    hfreq = hfreq[nonSlc[0]:nonSlc[1]+1,:]
+    hmag = hmag[nonSlc[0]:nonSlc[1] + 1, :]
+    hphase = hphase[nonSlc[0]:nonSlc[1] + 1, :]
+
+    # do interpolation, where harmonics are not detected within the sound(freq out of [minf0,maxf0])
+    hfreqNoise = find_freq_failure(hfreq,minf0,maxf0)
+    hfreq,hmag,hphase = mag_interpolate(hfreq,hfreqNoise, hmag, hphase)
+
+    ## tst
+    # save_path = 'result/test.xlsx'
+    # UM.save_matrix(save_path, hfreq, sheetName='guitar_freq_nonsilence_interp')
+
+    nF = hfreq.shape[0]
+    sdInfo['nF'] = nF
+
+    # calculate F0 (mean frequency of fundamentals)
+    f0 = np.mean(hfreq[:,0])
+    sdInfo['f0']=f0
+
+    # find frequency related features
+    freqMean, freqVar = freq_ana(hfreq, f0, 0)
+    freqVarRate = 0.01
+    freqSmoothLen = 31
+    sdInfo['freqInterval'] = 1
+    sdInfo['freqMean'] = freqMean
+    sdInfo['freqVar'] = freqVar
+    sdInfo['freqVarRate'] = freqVarRate
+    sdInfo['freqSmoothLen'] = freqSmoothLen
+
+    # find magnitude related features
+    t = np.arange(hfreq.shape[0]) * x.shape[0] / fs / hfreq.shape[0]
+    tArray = np.array([t]).T
+    hns, hCurve, hPoints = find_curved_partial(hmag.T, tArray)
+    for i in range(nH):
+        # hP = np.concatenate((np.array([0]), hPoints[i, :], np.array([nF - 1])))
+        if i == 0:
+            magPointsValue = hmag[hPoints[i, :],i]
+        else:
+            magPointsValue = np.vstack((magPointsValue,hmag[hPoints[i, :],i]))
+
+    sdInfo['magADSRIndex'] = hPoints.T
+    sdInfo['magADSRValue'] = magPointsValue.T
+    sdInfo['magADSRN']= hns.T
+
+    # find phase related features
+    ffphase = hphase[0, :]
+
+    ## tst
+    # plt.plot(ffphase,'x-')
+    # plt.xlabel('Harmonic Number')
+    # plt.ylabel('Phase(wrapped)')
+    # plt.title('First Frame Phase of '+sdInfo['instrument']+sdInfo['pitch'])
+    # plt.show()
+
+    ffphaseSyn, ffpSlot, ffpIntercept, ffpErr = find_first_frame_phase(ffphase, mode='linear')
+    sdInfo['phaseffSlope'] = ffpSlot
+    sdInfo['phaseffIntercept'] = ffpIntercept
+
+    return x, fs, hfreq, hmag, hphase, stocEnv, sdInfo
+
+
+def vector2dict(x,Y,nF=1000,silenceSt = 10, silenceEd = 10, meanMax = -100,nH = 40):
+    sdInfo = {'instrument':'synthesis',
+              'pitch':'',
+              'source':'',
+              'index':'111',
+              'nH':nH,
+              'nF':nF,
+              'FFTLenAna':8192,
+              'FFTLenSyn':512,
+              'hopSize':256,
+              'fs':44100,
+              'stocEnv': -50*np.ones((nF,12)), # no noise
+              'f0': x[0],
+              'freqInterval':1,
+              'freqVarRate':0,
+              'freqSmoothLen':31}
+
+    cursor = 0
+    sdInfo['freqMean'] = np.array(Y[cursor:cursor+nH])
+    cursor += nH
+    sdInfo['freqVar'] = np.array(Y[cursor:cursor+nH])
+    cursor += nH
+
+    # recover index
+    magRiseTimeAbs = np.array(Y[cursor:cursor+nH])/sdInfo['hopSize']*sdInfo['fs']
+    cursor += nH
+    magReleaseTimeRlt = np.array(Y[cursor:cursor+nH])
+    cursor += nH
+    slSt = silenceSt * np.ones(nH)
+    slEd = silenceSt * np.ones(nH)
+    magADSRIndex = np.vstack((slSt,slSt+magRiseTimeAbs,nF-slEd-magReleaseTimeRlt*(nF-slSt-slEd),nF-slEd)).astype(int)
+    sdInfo['magADSRIndex'] = magADSRIndex
+
+    # recover amplitude
+    magADSRValue = np.reshape(Y[cursor:cursor + 3*nH],(3,-1))
+    cursor += 3*nH
+
+    magADSRValueMax = np.array([Y[cursor:cursor+nH]])*dB2amp(meanMax)*nH
+    cursor += nH
+    # print(magADSRValue,magADSRValueMax)
+    magADSRN = np.vstack((np.ones(nH),np.reshape(Y[cursor:cursor+4*nH],(4,-1))))
+    cursor += 4*nH
+    magADSRValue = np.vstack((magADSRValue[0,:]*magADSRValueMax,magADSRValueMax,magADSRValue[1,:]*magADSRValueMax,magADSRValue[2,:]*magADSRValueMax))
+    sdInfo['magADSRValue'] = amp2dB(magADSRValue)
+    sdInfo['magADSRN'] = magADSRN
+
+    # recover phase
+    sdInfo['phaseffSlope'] = Y[cursor]
+    cursor += 1
+    sdInfo['phaseffIntercept'] = Y[cursor]
+
+    return sdInfo
+
+def dict2vector(sdInfo, raw=0, nH=40):
+    nH = sdInfo['nH']
+    harmClct = nH
+    if sdInfo['nH'] >= harmClct:
+        attackTimeAbs = (sdInfo['magADSRIndex'][1,:] - sdInfo['magADSRIndex'][0,:])*sdInfo['hopSize']/sdInfo['fs']
+        #releaseTimeAbs = (sdInfo['magADSRIndex'][3,:] - sdInfo['magADSRIndex'][2,:])*sdInfo['hopSize']/sdInfo['fs']
+        releaseTimeRlt = (sdInfo['magADSRIndex'][3, :] - sdInfo['magADSRIndex'][2, :])/(sdInfo['magADSRIndex'][3, :] - sdInfo['magADSRIndex'][0, :])
+
+        if raw == 0: # return normalized mag value
+            magADSRValue = dB2amp(sdInfo['magADSRValue']) # use real amplitude instead of dB scale
+            magADSRValueNorm = magADSRValue/np.repeat(magADSRValue[1:2,:],4,axis=0)
+            # actually the second point is not always the max, but when it is not, it's always pretty close to the max(usually the third point)
+            magADSRValueNorm = np.concatenate((magADSRValueNorm[0:1,:],magADSRValueNorm[2:,:]))[:,:harmClct]
+            magADSRValueMax = (magADSRValue[1,:]/np.sum(magADSRValue[1,:]))[:harmClct] # to avoid the interference of dynamics
+
+            ft = [sdInfo['f0']] + sdInfo['freqMean'][:harmClct].tolist() + sdInfo['freqVar'][:harmClct].tolist() + attackTimeAbs[:harmClct].tolist()\
+                 + releaseTimeRlt[:harmClct].tolist() + np.reshape(magADSRValueNorm,-1).tolist() + magADSRValueMax.tolist()\
+                 + np.reshape(sdInfo['magADSRN'][1:,:harmClct],-1).tolist() + [sdInfo['phaseffSlope'],sdInfo['phaseffIntercept']]
+
+        elif raw == 1:
+            magADSRValue = dB2amp(sdInfo['magADSRValue'])
+            ft = [sdInfo['f0']] + sdInfo['freqMean'][:harmClct].tolist() + sdInfo['freqVar'][:harmClct].tolist() + attackTimeAbs[:harmClct].tolist() \
+                 + releaseTimeRlt[:harmClct].tolist() + magADSRValue.tolist() \
+                 + np.reshape(sdInfo['magADSRN'][1:, :harmClct], -1).tolist() + [sdInfo['phaseffSlope'],sdInfo['phaseffIntercept']]
+
+        else:
+            print('wrong raw parameter, returning raw date.')
+            magADSRValue = dB2amp(sdInfo['magADSRValue'])
+            ft = [sdInfo['f0']] + sdInfo['freqMean'][:harmClct].tolist() + sdInfo['freqVar'][:harmClct].tolist() + attackTimeAbs[:harmClct].tolist() \
+                 + releaseTimeRlt[:harmClct].tolist() + magADSRValue.tolist() \
+                 + np.reshape(sdInfo['magADSRN'][1:, :harmClct], -1).tolist() + [sdInfo['phaseffSlope'],sdInfo['phaseffIntercept']]
+        
+        return ft
+    else:
+        print("Need"+ str(harmClct)+ "harmonics, only ",sdInfo['nH']," collected!")
+        return
+
+
+###################################################################################
+
+############## functions for sound morphing ###############################################
+def sound_morphing(sdInfo, sdInfo_ref, morph_rate, duration, intensity):    
+    for key in sdInfo:
+        if key not in ['instrument', 'pitch', 'source', 'index', 'nH', 'windowSize', 'window', 'FFTLenAna', 'FFTLenSyn', 'hopSize', 'fs', 'stocEnv']:
+            sdInfo[key] = morph_rate*sdInfo[key] + (1-morph_rate)*sdInfo_ref[key]
+            if key in ['nF','freqSmoothLen']:
+                sdInfo[key] = int(sdInfo[key])
+            elif key in ['magADSRIndex']:
+                sdInfo[key] = np.array(sdInfo[key],dtype=int)
+
+    sdInfo['nF'] = int(sdInfo['nF'])
+
+    # assigning duration and intensity
+    sdFt = dict2vector(sdInfo)
+    sdInfo_new = vector2dict(sdFt[0:1], sdFt[1:], nF = duration, meanMax = intensity, nH = sdInfo['nH'])
+    
+    # define some parameters for the reconstructed sdInfo
+    sdInfo_new['window'] = sdInfo['window']
+    sdInfo_new['windowSize'] = sdInfo['windowSize']
+
+    return sdInfo_new, sdFt
+###########################################################################################
+
 ########## utility func ###################################################################
-def pitch2freq(pitch):
+def pitchname2num(pitch, sharp='#'):
     if isinstance(pitch, str):
-        chroma = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
+        chroma = ['C','C'+sharp,'D','D'+sharp,'E','F','F'+sharp,'G','G'+sharp,'A','A'+sharp,'B']
         if pitch[:-1] in chroma:
             pitch = (int(pitch[-1])+1)*12 + chroma.index(pitch[:-1])
         else:
-            print('pitch incorrect!')
+            print('pitch incorrect')
+    return pitch
+
+def pitch2freq(pitch, sharp='#'):
+    if isinstance(pitch, str):
+        pitch = pitchname2num(pitch, sharp)
 
     return (2**((pitch-69)/12))*440
 
@@ -605,6 +906,12 @@ def dB2abslt(x):
         return np.power(10,x/20)
     elif isinstance(x,int) or isinstance(x,float):
         return 10**(x/20)
+        
+def dB2amp(X):
+    return 10**(X/20)
+
+def amp2dB(X):
+    return 20*np.log10(X)
 ###########################################################################################
 
 ########################## plot spectrogram ###############################################
@@ -614,64 +921,6 @@ def plot_spectrogram(sd,fs=44100):
     else:
         x = sd
 
-    window = 'hamming'
-    M = 4096
-    N = 4096
-    H = 512
-    w = sig.get_window(window,M)
-    mX, pX = STFT.stftAnal(x, w, N, H)
-    # mX = mX/np.min(mX)
-
-    maxplotfreq = 5000.0
-    numFrames = int(mX[:, 0].size)
-    frmTime = H * np.arange(numFrames) / float(fs)
-    binFreq = fs * np.arange(N * maxplotfreq / fs) / N
-    plt.pcolormesh(frmTime, binFreq, np.transpose(mX[:, :int(N * maxplotfreq / fs + 1)]))
-    plt.xlabel('time (sec)')
-    plt.ylabel('frequency (Hz)')
-    plt.title('magnitude spectrogram')
-    plt.autoscale(tight=True)
-    plt.show()
-
-    return mX,pX,fs,H
-
-###########################################################################################
-
-if __name__ == '__main__':
-    ################ test dB2abslt #########################
-    print(dB2abslt(np.array([20])))
-    ######################################################
-
-    ################ test smooth #########################
-    # x = np.arange(10)
-    # y = x ** 3 - 4 * x + 1.8
-    # y_sm = smooth(y,5)
-    # print(y,y_sm)
-    ######################################################
-
-
-    ######## def: pitch2freq ###############
-    # print(pitch2freq(69))
-    # print(pitch2freq("A4"))
-    # print(pitch2freq("C#3"))
-    # ########################################
-
-    ######## def: find_first_frame_phase ###############
-    # x = np.arange(10)+3
-    # y, slope, intercept, err = find_first_frame_phase(x, mode = 'linear')
-    # print(y, slope, intercept,err)
-    ####################################################
-
-    ######## def: non_silence_dtct ###############
-    # x = [0,0,0,2,3,4,5,0,0,5,6]
-    # y = non_silence_dtct(x,1,6)
-    # print(x[y[0]:y[1]+1])
-    ####################################################
-
-    ######## def: non_silence_dtct ###############
-    # x = np.array([[0, 0, 0, 2, 3, 4, 5, 0, 0, 5, 6],[0, 0, 0, 2, 3, 4, 5, 0, 0, 5, 6]]).T
-    # y = find_freq_failure(x, 1, 6)
-    #
     # a,b,c = mag_interpolate(x,y,x,x)
     #
     # print(a)

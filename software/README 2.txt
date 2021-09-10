@@ -1,1 +1,0 @@
-This directory includes all the code, the spectral analysis/synthesis models(refers to sms-tool), and timbre analysis and synthesis models.

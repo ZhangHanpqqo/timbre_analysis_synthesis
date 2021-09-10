@@ -7,11 +7,15 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.signal as sig
+import copy
 
 import utilFunctions as UF
 import hpsModel as HPS
 import harmonicModel as HM
 import utilModi as UM
+import instrument_feature as INSF
+import timbreModi as TM
+import find_attack as FA
 
 def harm_ana(file_path):
     (fs, x) = UF.wavread(file_path)
@@ -152,62 +156,233 @@ def plot_corr_hist(corr,instmt):
     plt.title(instmt)
     plt.show()
 
+def bubble_sorting(pitch_num, pitch_label, fund_harm, fund_freq):
+    for i in range(1, len(pitch_label)):
+        for j in range(0, len(pitch_label)-i):
+            if pitch_num[j]>pitch_num[j+1]:
+                pitch_num[j], pitch_num[j+1] = pitch_num[j+1], pitch_num[j]
+                pitch_label[j], pitch_label[j+1] = pitch_label[j+1], pitch_label[j]
+                
+                temp = copy.deepcopy(fund_harm[:,j])
+                fund_harm[:,j] = copy.deepcopy(fund_harm[:,j+1])
+                fund_harm[:,j+1] = copy.deepcopy(temp)
+                temp = copy.deepcopy(fund_freq[:,j])
+                fund_freq[:,j] = copy.deepcopy(fund_freq[:,j+1])
+                fund_freq[:,j+1] = copy.deepcopy(temp)
+
+    return pitch_label, fund_harm, fund_freq
 
 if __name__ == '__main__':
 
-    # instruments: flute, oboe, saxophone, horn, violin, erhu, guitar, harp, piano, organ, trumpet
-    # synthesizer: classicPad, pianoStrings, shortWorm, transistorOrgan
-    instruments = ['flute', 'oboe', 'saxophone', 'horn', 'violin', 'erhu', 'guitar', 'harp', 'piano', 'organ', 'trumpet']
-    ins = ['trumpet']
-    # pitches = ['G3','C4','G4','A4','C5','G5','C6','G6']
-    # pitches = ['C4', 'G4', 'A4', 'C5', 'G5', 'C6', 'G6']
-    pitches = ['C4', 'G4', 'A4', 'C5', 'G5']
-    pit = ['G4']
-    p3 = ['G3']
-    p4 = ['C4','G4','A4']
-    p5 = ['C5','G5']
-    p6 = ['C6','G6']
+    # 2: check correlation between harmonics of a same sound
+    # 3: check correlation between fundamental harmonic of different instruments on a same pitch
+    # 4: check correlation between fundamental harmonic of the same instrument but on different pitches
+    exp = 4
 
-    ############ instrument group ################
-    # find correlation matrix for each instruments
-    # save_path = 'result/result.xlsx'
-    # for instmt in instruments:
-    #     file_path = '../../sounds/A4/'+ instmt + '-A4.wav'
-    #     corrMat = corr_ana(file_path)
-    #     save_matrix(save_path,corrMat,sheetName=instmt)
+    if exp == 1:
+        # instruments: flute, oboe, saxophone, horn, violin, erhu, guitar, harp, piano, organ, trumpet
+        # synthesizer: classicPad, pianoStrings, shortWorm, transistorOrgan
+        instruments = ['flute', 'oboe', 'saxophone', 'horn', 'violin', 'erhu', 'guitar', 'harp', 'piano', 'organ', 'trumpet']
+        ins = ['trumpet']
+        # pitches = ['G3','C4','G4','A4','C5','G5','C6','G6']
+        # pitches = ['C4', 'G4', 'A4', 'C5', 'G5', 'C6', 'G6']
+        pitches = ['C4', 'G4', 'A4', 'C5', 'G5']
+        pit = ['G4']
+        p3 = ['G3']
+        p4 = ['C4','G4','A4']
+        p5 = ['C5','G5']
+        p6 = ['C6','G6']
 
-    # find correlation above 0.9 and sort them, different instrument
-    # res_path = 'result/result.xlsx'
-    # for instmt in instruments:
-    #     sheetName = instmt
-    #     corrMat = read_matrix(file_path, sheetName)
-    #     find_salient_correlation(corrMat, sheetName)
+        ############ instrument group ################
+        # find correlation matrix for each instruments
+        # save_path = 'result/result.xlsx'
+        # for instmt in instruments:
+        #     file_path = '../../sounds/A4/'+ instmt + '-A4.wav'
+        #     corrMat = corr_ana(file_path)
+        #     save_matrix(save_path,corrMat,sheetName=instmt)
 
-    ##############################################
+        # find correlation above 0.9 and sort them, different instrument
+        # res_path = 'result/result.xlsx'
+        # for instmt in instruments:
+        #     sheetName = instmt
+        #     corrMat = read_matrix(file_path, sheetName)
+        #     find_salient_correlation(corrMat, sheetName)
 
-    ################# single instrument ######################
-    # find correlation matrix for flute in each pitch
-    # save_path = 'result/violin.xlsx'
-    # # for pitch in pitches:
-    # for pitch in p5:
-    #     file_path = '../../sounds/violin/' + 'violin-' + pitch + '.wav'
-    #     if os.path.exists(file_path):
-    #         corrMat = corr_ana(file_path)
-    #         sheetName = 'violin' + pitch
-    #         save_matrix(save_path, corrMat, sheetName=sheetName)
-    #         find_salient_correlation(corrMat, sheetName)
+        ##############################################
 
-    #########################################################
+        ################# single instrument ######################
+        # find correlation matrix for flute in each pitch
+        # save_path = 'result/violin.xlsx'
+        # # for pitch in pitches:
+        # for pitch in p5:
+        #     file_path = '../../sounds/violin/' + 'violin-' + pitch + '.wav'
+        #     if os.path.exists(file_path):
+        #         corrMat = corr_ana(file_path)
+        #         sheetName = 'violin' + pitch
+        #         save_matrix(save_path, corrMat, sheetName=sheetName)
+        #         find_salient_correlation(corrMat, sheetName)
 
-    ################# plot correlation ######################
-    save_path = 'result/violin.xlsx'
-    # for instmt in ins:
-    for p in p5:
-        # sheetName = instmt
-        sheetName = 'violin'+p
-        corr = read_matrix(save_path,sheetName)
-        plot_corr_hm(corr,sheetName)
-        # plot_corr_hist(corr, sheetName)
+        #########################################################
 
-    #########################################################
+        ################# plot correlation ######################
+        save_path = 'result/violin.xlsx'
+        # for instmt in ins:
+        for p in p5:
+            # sheetName = instmt
+            sheetName = 'violin'+p
+            corr = read_matrix(save_path,sheetName)
+            plot_corr_hm(corr,sheetName)
+            # plot_corr_hist(corr, sheetName)
+
+        #########################################################
+
+    
+    elif exp == 2:
+        file_path = '../../sounds/phiharmonia/test/test_len15_A4/'
+
+        for f in os.listdir(file_path):
+            if f[-3:] == 'wav':
+                print(f)
+                instrument, pitch, length, dynamic, articulation = TM.naming_info_phiharmonia(f)
+
+                minf0 = UM.pitch2freq(pitch)-50
+                maxf0 = minf0+100 
+        
+                x, fs, hfreq, hmag, hphase, stocEnv = TM.hps_ana(file_path+f,nH=40,minf0=minf0,maxf0=maxf0,N=4096,M=4096,H=256)
+                non_silence = UM.non_silence_dtct(hfreq[:,0], minf0, maxf0)
+                corrMat = find_corr_matrix(hmag[non_silence[0]:non_silence[1],:])
+                
+                # save_path = '../temp.xlsx'
+                # save_matrix(save_path, corrMat, sheetName=instrument)
+                
+                plt.imshow(corrMat, vmin=0, vmax=1)
+                plt.title(instrument+' harmonics correlation')
+                plt.show()
+
+    
+    elif exp == 3:
+        file_path = '../../sounds/phiharmonia/test/test_len1_A5/'
+        ins_label = []
+        flag = 0
+
+        for f in os.listdir(file_path):
+            if f[-3:] == 'wav':
+                instrument, pitch, length, dynamic, articulation = TM.naming_info_phiharmonia(f)
+
+                minf0 = UM.pitch2freq(pitch)-50
+                maxf0 = minf0+100 
+        
+                x, fs, hfreq, hmag, hphase, stocEnv = TM.hps_ana(file_path+f,nH=40,minf0=minf0,maxf0=maxf0,N=4096,M=4096,H=256)
+                non_silence = UM.non_silence_dtct(hfreq[:,0], minf0, maxf0)
+                hmag = hmag[non_silence[0]:non_silence[1],0]
+                hfreq = hfreq[non_silence[0]:non_silence[1],0]
+                
+                ins_label.append(instrument)
+                harm0 = np.zeros((100,1))
+                freq0 = np.zeros((100,1))
+                nF = hmag.size
+                for i in range(100):
+                    ind = int(i/100*nF)
+                    harm0[i] = hmag[ind]
+                    freq0[i] = hfreq[ind]
+
+                if flag == 0:
+                    fund_harm = harm0
+                    fund_freq = freq0
+                    flag = 1
+                else:
+                    fund_harm = np.concatenate((fund_harm, harm0),axis=1)
+                    fund_freq = np.concatenate((fund_freq, freq0),axis=1)
+
+        instrumentOrder = ['flute','oboe','clarinet','saxophone','french-horn','trumpet','violin','cello']
+        ins_num = []
+        for i in ins_label:
+            ins_num.append(instrumentOrder.index(i))
+        ins_label, fund_harm, fund_freq = bubble_sorting(ins_num, ins_label, fund_harm, fund_freq)
+
+        # fund_harm = np.array(fund_harm)
+        # print(fund_harm.shape)
+        corrMat = find_corr_matrix(fund_harm)
+       
+        num = len(ins_label)
+        fig, ax = plt.subplots(1,1)
+        # img = ax.imshow(corrMat, vmin=0, vmax=1)
+        img = ax.imshow(corrMat)
+        ax.set_xticks(np.arange(num))
+        ax.set_xticklabels(ins_label)
+        ax.set_yticks(np.arange(num))
+        ax.set_yticklabels(ins_label)
+        plt.title('correlation beteewn fundamental harmonics on '+pitch)
+        fig.colorbar(img)
+        plt.show()
+        
+        fund_hfreq = np.repeat(np.array([np.arange(num)]).T, 100, axis=1)
+        UM.plot_spec3d(fund_hfreq.T, fund_harm, np.arange(100))
+
+
+    elif exp == 4:
+        file_path = '../../sounds/phiharmonia/test/test_violin/'
+        pitch_label = []
+        flag = 0
+
+        for f in os.listdir(file_path):
+            if f[-3:] == 'wav':
+                instrument, pitch, length, dynamic, articulation = TM.naming_info_phiharmonia(f)
+
+                minf0 = UM.pitch2freq(pitch)-50
+                maxf0 = minf0+100 
+
+                x, fs, hfreq, hmag, hphase, stocEnv = TM.hps_ana(file_path+f,nH=40,minf0=minf0,maxf0=maxf0,N=4096,M=4096,H=256)
+                non_silence = UM.non_silence_dtct(hfreq[:,0], minf0, maxf0)
+                hmag = hmag[non_silence[0]:non_silence[1],0]
+                # hmag = FA.find_spline_harmonic(hmag, lam=10000)
+                hfreq = hfreq[non_silence[0]:non_silence[1],0]
+
+                pitch_label.append(pitch)
+                harm0 = np.zeros((100,1))
+                freq0 = np.zeros((100,1))
+                nF = hmag.size
+                for i in range(100):
+                    ind = int(i/100*nF)
+                    harm0[i] = hmag[ind]
+                    freq0[i] = hfreq[ind]
+
+                if flag == 0:
+                    fund_harm = harm0
+                    fund_freq = freq0
+                    flag = 1
+                else:
+                    fund_harm = np.concatenate((fund_harm, harm0),axis=1)
+                    fund_freq = np.concatenate((fund_freq, freq0),axis=1)
+
+        # sort according to the pitches
+        chroma = ['C','Cs','D','Ds','E','F','Fs','G','Gs','A','As','B']
+        pitch_num = []
+        for i in range(len(pitch_label)):
+            pitch_num.append((int(pitch_label[i][-1])+1)*12 + chroma.index(pitch_label[i][:-1]))
+        pitch_label, fund_harm, fund_freq = bubble_sorting(pitch_num, pitch_label, fund_harm, fund_freq)
+
+        print()
+        # fund_harm = np.array(fund_harm)
+        corrMat = find_corr_matrix(fund_harm)
+        print(corrMat)
+        
+        fig, ax = plt.subplots(1,1)
+        img = ax.imshow(corrMat, vmin=0, vmax=1)
+        ax.set_xticks(np.arange(len(pitch_label)))
+        ax.set_xticklabels(pitch_label)
+        ax.set_yticks(np.arange(len(pitch_label)))
+        ax.set_yticklabels(pitch_label)
+        plt.title('correlation beteewn fundamental harmonics for '+instrument)
+        fig.colorbar(img)
+        plt.show()
+        
+        UM.plot_spec3d(fund_freq, fund_harm, np.arange(100))
+        plt.subplot(1,2,1)
+        plt.plot(fund_harm[:,0])
+        plt.title('Harmonic # 1')
+        plt.subplot(1,2,2)
+        plt.plot(fund_harm[:,1])
+        plt.title('Harmonic # 2')
+        plt.show()
 

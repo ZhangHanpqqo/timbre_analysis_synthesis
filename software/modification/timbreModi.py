@@ -21,23 +21,23 @@ import find_attack as FA
 def spec_modi(file_path, showTest, modiType, flatSpec):
     (fs, x) = UF.wavread(file_path)
 
-    # parameters
-    # window shapex
-    window = 'blackmanharris'
+    # # parameters
+    # # window shapex
+    # window = 'blackmanharris'
 
-    # window size M
-    M = 4096
+    # # window size M
+    # M = 4096
 
-    # fft size
-    N = 8192
+    # # fft size
+    # N = 8192
 
-    # FFT SIZE FOR SYNTHESIS
-    Ns = 512
+    # # FFT SIZE FOR SYNTHESIS
+    # Ns = 512
 
-    # HOP SIZE
-    H = 128
+    # # HOP SIZE
+    # H = 128
 
-    # threshold for harmonics in dB
+    # # threshold for harmonics in dB
     t = -200
 
     # min sinusoid duration to be considered as harmonics
@@ -265,6 +265,10 @@ def hps_ana(file_path, nH=40, minf0=100, maxf0=1000, M=4001,N=8192,Ns=512,H=128)
     # DECIMATION FACTOR FOR STOCHASTIC GENERATION
     stocf = 0.1
 
+    # dbg
+    # print('Hop size in hps_ana',H)
+
+
     w = sig.get_window(window, M)
     hfreq, hmag, hphase, stocEnv = HPS.hpsModelAnal(x, fs, w, N, H, t, nH, minf0, maxf0, f0et, harmDevSlope, minSineDur,
                                                     Ns, stocf)
@@ -346,8 +350,6 @@ def spec_synth(x, fs, hfreq, hmag, hphase, stocEnv, showTest, mode, minf0=100, m
         fIntv = f0
         fFund = f0
 
-        print(f0)
-
         freqMean, freqVar = UM.freq_ana(hfreq,f0,0)
         hfreqBase = np.arange(hfreq.shape[1]) * fIntv + fFund
         hfreqBase = np.array([hfreqBase])
@@ -355,7 +357,6 @@ def spec_synth(x, fs, hfreq, hmag, hphase, stocEnv, showTest, mode, minf0=100, m
 
         varRate = 0
         hfreqDist = []
-        # print(freqVar)
 
         smFreq = 31 # choose the box size for smoothing. Need to be odd. If not to smooth, set 1.
         for i in range(hfreq.shape[1]):
@@ -371,7 +372,6 @@ def spec_synth(x, fs, hfreq, hmag, hphase, stocEnv, showTest, mode, minf0=100, m
 
         hfreqDist = np.array(hfreqDist).T
         hfreqSyn = hfreqBase+hfreqDist
-
 
     t = np.arange(hfreq.shape[0]) * x.shape[0] / fs / hfreq.shape[0]
     tArray = np.array([t]).T
@@ -521,8 +521,8 @@ def spec_synth(x, fs, hfreq, hmag, hphase, stocEnv, showTest, mode, minf0=100, m
         UM.plot_spec3d(hfreqSyn, hmagSyn, t,1)
         # UM.plot_spec3d_cmp(hfreq, hmag, t, hfreqSyn, hmagSyn, t)
 
-        plt.figure()
-        UM.plot_spectrogram(outputFile)
+        # plt.figure()
+        # UM.plot_spectrogram(outputFile)
 
     if showTest in [4]:
         plt.figure()
@@ -702,14 +702,20 @@ def save_features_to_json():
             save_path = 'result/features'
             UM.save_dictionary(sdInfo, save_path,1)
 
-
-
+def naming_info_phiharmonia(str):
+    # extracting instrument information from the names
+    div = [pos for pos,char in enumerate(str) if char == '_']
+    instrument = str[:div[0]]
+    pitch = str[div[0]+1: div[1]]
+    length = str[div[1]+1: div[2]]
+    dynamic = str[div[2]+1: div[3]]
+    articulation = str[div[3]+1: str.find(".")]
+    return instrument, pitch, length, dynamic, articulation
 
 
 if __name__ == "__main__":
-    # save_features_to_json()
 
-    exp = 2
+    exp = 4 
 
     if exp == 0:
         sdInfo = UM.read_features('result/features/flute_acoustic/flute_acoustic-A5-002.json', 1)
@@ -729,25 +735,26 @@ if __name__ == "__main__":
     elif exp == 2:
         ######## sound analysis and synthesis ################################################################################
         # instruments = ['flute', 'oboe', 'saxophone', 'horn', 'violin', 'erhu', 'guitar', 'harp', 'piano', 'organ', 'trumpet']
-        # file_path = '../../sounds/brass_acoustic/brass_acoustic_valid/brass_acoustic_006-081-075.wav'
+        file_path = '../../sounds/phiharmonia/test/test_violin/violin_A3_1_forte_arco-normal.wav' 
         # UM.plot_spectrogram(file_path)
-        file_path = '../../sounds/A4/trumpet-A4.wav'
-
-        # UM.plot_spectrogram(file_path)
+        # file_path = '../../sounds/A4/violin-A4.wav'
+        # file_path = '../../sounds/midi_synth/flute-C5-1.wav'
+        pitch = 'A3'
+        UM.plot_spectrogram(file_path)
 
         # f = UM.pitch2freq(97)
         # print(f)
 
         # parameters for harmonic model　
         nH = 10
-        minf0 = UM.pitch2freq(69)-50
-        maxf0 = UM.pitch2freq(69)+50
+        minf0 = UM.pitch2freq(pitch)-50
+        maxf0 =  minf0 + 100
 
-        x, fs, hfreq, hmag, hphase, stocEnv = hps_ana(file_path,nH=nH,minf0=minf0, maxf0=maxf0,N=8192,M=8192)
+        x, fs, hfreq, hmag, hphase, stocEnv = hps_ana(file_path,nH=nH,minf0=minf0, maxf0=maxf0,N=16384,M=16384,H = 256)
         # print(hfreq[:, 0], '\n', hmag[:, 0], '\n', hphase[:, 0])
         # print(hfreq[::,0],hfreq[::,1])
         # plt.plot(np.unwrap(hphase[0,:]),'x-')
-
+        # plt.plot(x)
 
         # hphasetemp = np.concatenate((np.zeros([1, hphase.shape[1]]), hphase))
         # hphase = np.unwrap(hphasetemp, axis=0)[1:, :]
@@ -782,9 +789,9 @@ if __name__ == "__main__":
         # plt.plot(hmagSyn[0, :], 'x-')
         # plt.show()
 
-        harm = hmagSyn[:, 1]
-        smLength = 11
-        harm = UM.smooth(harm, smLength)
+        # harm = hmagSyn[:, 1]
+        # smLength = 11
+        # harm = UM.smooth(harm, smLength)
 
 
         ################################################################################################################
@@ -795,16 +802,17 @@ if __name__ == "__main__":
         instrument = 'brass'
         pitch = 'A4'
         source = ''
-        index = 0
+        index = 1
 
         # file_path = '../../sounds/sd/'+ instrument + '-' + pitch + '.wav'
-        file_path = '../../sounds/brass_acoustic/brass_acoustic_valid/brass_acoustic_006-069-075.wav'
-        save_path = 'result/features/brass_acoustic/brass_acoustic_valid/'
-
+        # file_path = '../../sounds/brass_acoustic/brass_acoustic_valid/brass_acoustic_006-069-075.wav'
+        # save_path = 'result/features/midi_synth/'
+        file_path = '../../sounds/A4/flute-A4.wav' 
+        
         # parameters for harmonic model　
         nH = 40
-        minf0 = 400
-        maxf0 = 500
+        minf0 = UM.pitch2freq('A4')-50
+        maxf0 = UM.pitch2freq('A4')+50 
         M = 4001
         N = 8192
         Ns = 512
@@ -827,10 +835,18 @@ if __name__ == "__main__":
         #         # sdInfo['f0'] = sdInfo['f0']/2
 
         for i in sdInfo:
-            print(i,'\n')
+            print(i,':',sdInfo[i],'\n')
+
+        # modify rise time
+        # magADSRIndex = sdInfo['magADSRIndex']
+        # riseTime = magADSRIndex[1,:]-magADSRIndex[0,:]
+        # riseTimeModi = copy.deepcopy(riseTime)
+        # riseTimeModi[3:] = np.round(riseTime[3:]+200)
+        # magADSRIndex[0,3:] = magADSRIndex[0,3:]+50
+        # magADSRIndex[1,:] = magADSRIndex[0,:]+riseTimeModi
+        # sdInfo['magADSRIndex'] = magADSRIndex
 
         y, yh, yst, hfreqSyn, hmagSyn, hphaseSyn = sound_syn_from_para(sdInfo)
-
 
 
         # Showtest
@@ -838,15 +854,21 @@ if __name__ == "__main__":
         # 1: sound
         # 2: graph
         # 3: sound+graph
-        UM.display_syn(file_path,sdInfo['fs'], sdInfo['hopSize'],sdInfo['nF'], y,yh,yst, hfreqSyn, hmagSyn, hphaseSyn, mode=0)
+        UM.display_syn(file_path,sdInfo['fs'], sdInfo['hopSize'],sdInfo['nF'], y,yh,yst, hfreqSyn, hmagSyn, hphaseSyn, mode=1)
+        plt.plot(hmagSyn[:,0])
+        plt.show()
+
 
         # save features to a csv file
         # save_path = 'result/features'
         # UM.save_dictionary(sdInfo,save_path,1)
+        # UM.save_dictionary(sdInfo,save_path,1)
 
-        sdInfo = sound_info_clct(file_path, sdInfo, nH=nH, minf0=minf0, maxf0=maxf0, M=M, N=N, Ns=Ns, H=H)
-        UM.save_dictionary(sdInfo, save_path, fm=1)
-        print('done')
+        # sdInfo = sound_info_clct(file_path, sdInfo, nH=nH, minf0=minf0, maxf0=maxf0, M=M, N=N, Ns=Ns, H=H)
+        # UM.save_dictionary(sdInfo, save_path, fm=1)
+        # for k in sdInfo:
+        #     print(k,':',sdInfo[k])
+        # print('done')
 
         ################################### #############################################################################
 
@@ -876,15 +898,15 @@ if __name__ == "__main__":
                     pitch = ft['pitch']
 
                     if pitch < 72:
-                        M = 16384
+                        M = 4096
                     else:
-                        M = 8192
+                        M = 2048
 
                     pitch = chroma[pitch%12] + str(int(pitch/12)-1)
 
                     N = M*2
                     Ns = 512
-                    H = 128
+                    H = 256
                     nH = 40
                     sdInfo = {
                         'instrument':instrument,
@@ -900,7 +922,7 @@ if __name__ == "__main__":
 
                     freqency = UM.pitch2freq(sdInfo['pitch'])
                     minf0 = freqency-50
-                    maxf0 = freqency+50
+                    maxf0 = minf0+100
 
                     try:
                         sdInfo = sound_info_clct(files_path+f, sdInfo, nH=nH, minf0=minf0, maxf0=maxf0, M=M, N=N, Ns=Ns, H=H)
@@ -959,7 +981,7 @@ if __name__ == "__main__":
         # # stochastic model
         # sdInfo['stocEnv'] = -60*np.ones((nF,12))
 
-        flInfo = UM.read_features('result/features/flute_acoustic/flute_acoustic_test/flute_acoustic-C#6-002-127.json', 1)
+        flInfo = UM.read_features('result/features/phiharmonia/violin/violin-81-4.json', 1)
         # sdInfo = flInfo.copy()
         # sdInfoNew = sdInfo.copy()
         sdInfo = copy.deepcopy(flInfo)
@@ -974,17 +996,17 @@ if __name__ == "__main__":
 
         # Some Modifications
         # 1 change rise time separatly
-        magIndex = sdInfo['magADSRIndex']
-        nH = sdInfo['nH']
-        EOA = np.round(magIndex[1,:]-magIndex[0,:])*(1.5**(-np.arange(nH)+20)) + magIndex[0,:]
-        sdInfoNew['magADSRIndex'][1,:] = EOA
+        # magIndex = sdInfo['magADSRIndex']
+        # nH = sdInfo['nH']
+        # EOA = np.round(magIndex[1,:]-magIndex[0,:])*(1.5**(-np.arange(nH)+20)) + magIndex[0,:]
+        # sdInfoNew['magADSRIndex'][1,:] = EOA
 
         # synthesis
         y, yh, yst, hfreqSyn, hmagSyn, hphaseSyn = sound_syn_from_para(sdInfo)
         yNew, yhNew, ystNew, hfreqSynNew, hmagSynNew, hphaseSynNew = sound_syn_from_para(sdInfoNew)
 
         # playsound
-        mode = 2
+        mode = 1
         if mode in [1,3]:
             outputFileSines = 'output_sounds/syn_sines.wav'
             outputFileStochastic = 'output_sounds/syn_stochastic.wav'
@@ -995,7 +1017,7 @@ if __name__ == "__main__":
             UF.wavwrite(y, sdInfo['fs'], outputFile)
             UF.wavwrite(yNew,sdInfo['fs'], outputFileNew)
 
-            UF.wavplay('../../sounds/flute_acoustic/flute_acoustic_test/flute_acoustic_002-085-127.wav')
+            UF.wavplay('../../sounds/phiharmonia/violin/violin_A5_15_forte_arco-normal.wav')
             UF.wavplay(outputFile)
             UF.wavplay(outputFileNew)
 
@@ -1010,8 +1032,69 @@ if __name__ == "__main__":
             # UM.plot_spec3d(hfreqSyn, hphaseSyn, t, 1)
 
         ###############################################################################
+    
+    elif exp == 6:
+        ##################### collect features for sounds in phiharmonia db ##################
+        instruments = ['oboe','clarinet','saxophone','french horn','trumpet','violin','cello']
+        # instruments = ['saxophone','french horn','trumpet','violin','cello']
+        # instruments = ['test']
+        files_path = '../../sounds/phiharmonia/'
+        save_path = 'result/features/phiharmonia/'
+        for ins in instruments:
+            for f in os.listdir(files_path+ins+"/"):
+                if f[-3:] == 'wav':
+                    # get genral information for the sound
+                    instrument, pitch, length, dynamic, articulation = naming_info_phiharmonia(f)
+                    length_all = ['15','1','05','025']
+                    dynamic_all = ['pianissimo','piano','mezzo-piano','mezzo-forte','forte','fortissimo']
+                    
+                    if f[-3:] == 'wav' and dynamic in dynamic_all:
+                        index = length_all.index(length)*len(dynamic_all) + dynamic_all.index(dynamic) 
 
+                        # change pitch name to number
+                        chroma = ['C','Cs','D','Ds','E','F','Fs','G','Gs','A','As','B']
+                        pitch = chroma.index(pitch[:-1]) + (int(pitch[-1])+1)*12
+
+                        ## tst
+                        # print(pitch)
+
+                        if pitch < 72:
+                            M = 4096
+                        else:
+                            M = 2048
+
+
+                        N = M*2
+                        Ns = 512
+                        H = 256
+                        nH = 40
+                        sdInfo = {
+                            'instrument':instrument,
+                            'pitch':str(pitch),
+                            'source':'phiharmonia_database' ,
+                            'index':index,
+                            'nH':nH,
+                            'nF': 0,
+                            'FFTLenAna': N,
+                            'FFTLenSyn': Ns,
+                            'hopSize': H
+                        }
+
+                        freqency = UM.pitch2freq(pitch)
+                        minf0 = freqency-50
+                        maxf0 = freqency+50
+
+                        try:
+                            sdInfo = sound_info_clct(files_path+ins+'/'+f, sdInfo, nH=nH, minf0=minf0, maxf0=maxf0, M=M, N=N, Ns=Ns, H=H)
+                            UM.save_dictionary(sdInfo, save_path+ins+'/', fm=1)
+                            print(f,'saved!')
+                        except:
+                            print('Failed to collect features for',f)
+
+                    else:
+                        print(f,'is not a recorded sound or has wrong dynamic!')
+                    
+            
     #################################################################################################
-
-
+    
 
